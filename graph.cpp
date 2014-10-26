@@ -141,7 +141,18 @@ int bfs_on_graph() {
       /* Build next level. Check if pin is in visited list. TODO: make list bitmap */
       if ( std::find(Visited.begin(), Visited.end(), key) == Visited.end() ) {
         isFinalLevel = false;
+
+        // Insert pin to visited
         Visited.insert(Visited.end(), key );
+
+        /* If pin is input, that means that it is connected in-cell. *
+         * So we need to call interpolation/extrapolation functions, *
+         * else do  */
+        if ( Pins[key].isInput )
+          cout << "Calling interpolation" << endl;
+        else
+          cout << "Do something else!" << endl;
+/*
         int number_of_arcs = Cells[i->cellType].timingArcs.size();
         if ( number_of_arcs ) {
           for (  int j = 0; j < number_of_arcs; j++ ) {
@@ -149,6 +160,7 @@ int bfs_on_graph() {
               cout << "Cell type: " << Cells[i->cellType].timingArcs[j].fallDelay.loadIndices[4] << endl; // Binary search here
           }
         }
+*/
         cout << key << endl << endl << endl;
         nextLevel.insert( nextLevel.end(), Pins[key].linksTo.begin(), Pins[key].linksTo.end() );
       }
