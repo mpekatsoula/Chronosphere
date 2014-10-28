@@ -214,39 +214,61 @@ bool VerilogParser::read_cell_inst (string& cellType, string& cellInstName) {
   cellInstName = tokens[1] ;
   vector<string> insideNets;
 
+  /* Some temporary variables */
+  NetPin newPin;
+  std::vector<LibParserPinInfo>::iterator cell_fromPin, cell_toPin;
+
+
+  /* Store in-cell connections. Iterate through all timing arcs *
+   * and for every fromPin --> toPin connection, insert is to   *
+   * the Nets hash table.                                       *
+   * Reminder: They are the opposite of the normal nets.        *
+   * Inputs are outputs and the opposite                        */
+  int number_of_arcs = Cells[cellType].timingArcs.size();
+
+  for ( int j = 0; j < number_of_arcs; j++ ) {
+
+    string fromPin = Cells[cellType].timingArcs[j].fromPin;
+    string toPin = Cells[cellType].timingArcs[j].toPin;
+
+    newPin.instance_name = cellInstName; 
+    newPin.pinName = Cells[cellType].timingArcs[j].fromPin;
+    newPin.cellType = cellType;
+    string key = cellInstName + fromPin;
+
+    Nets[key].output = newPin;
+
+    /* Find the pins in order to check if they are clocks or inputs. *
+     * In case we find a FF don't connect ck with d                  */
+    cell_fromPin = std::find_if( Cells[cellType].pins.begin(), Cells[cellType].pins.end(),
+                                  findPinInfo( fromPin ) ); 
+    cell_toPin = std::find_if( Cells[cellType].pins.begin(), Cells[cellType].pins.end(),
+                                findPinInfo( toPin ) ); 
+ 
+    if ( (cell_fromPin->isInput || cell_fromPin->isClock) && !cell_toPin->isInput ) {
+      newPin.pinName = toPin;
+      Nets[key].inputs.push_back(newPin);
+    }
+
+  }
+
+
   for (int i=2; i < tokens.size()-1; i += 2) {
 
     assert (tokens[i][0] == '.') ; // pin names start with '.'
     string pinName = tokens[i].substr(1) ; // skip the first character of tokens[i] 
-    std::vector<LibParserPinInfo>::iterator it  = std::find_if( Cells[cellType].pins.begin(), Cells[cellType].pins.end(),
-                                                                findPinInfo( pinName ) ); // Find out if I am input or output
-    pinInfo.isInput = it->isInput ;    
-    
-    /* Store in-cell connections.                           *
-     * Reminder: They are the opposite of the normal nets.  *
-     * inputs are outputs and the opposite                  */
-    if ( pinInfo.isInput ) {
-      insideNets.push_back(cellInstName + pinName);
-      NetPin newPin;
-      newPin.instance_name = cellInstName;
-      newPin.pinName = pinName;
-      newPin.cellType = cellType;
-      Nets[cellInstName + pinName].output = newPin;
-    }
-    else {
-      NetPin newPin;
-      newPin.instance_name = cellInstName;
-      newPin.pinName = pinName;
-      newPin.cellType = cellType;
-      for( std::vector<string>::const_iterator i = insideNets.begin(); i != insideNets.end(); ++i)
-        Nets[*i].inputs.push_back(newPin);
-    }
+    std::vector<LibParserPinInfo>::iterator cellPin  = std::find_if( Cells[cellType].pins.begin(), Cells[cellType].pins.end(),
+                                                                     findPinInfo( pinName ) ); // Find out if I am input or output
+    pinInfo.isInput = cellPin->isInput ;    
 
-    Nets[tokens[i+1]].name = pinName ; // Copy net name
-    NetPin newPin;
+    /* Create a newPin and store info */
     newPin.instance_name = cellInstName;
     newPin.pinName = pinName;
     newPin.cellType = cellType;
+  
+    /* Create key for Pins hash table */
+    string key = cellInstName + pinName;
+    Nets[tokens[i+1]].name = pinName ; // Copy net name
 
     // Store net inputs and outputs
     if ( pinInfo.isInput )
@@ -254,12 +276,10 @@ bool VerilogParser::read_cell_inst (string& cellType, string& cellInstName) {
     else
       Nets[tokens[i+1]].output = newPin ;
     
-
     // Store net info inside the Net hash table and 
     // also store the pin to Pin hash table
-    Pins[cellInstName + pinName] = pinInfo;
+    Pins[key] = pinInfo;
 
-    //pinNetPairs.push_back(std::make_pair(pinName, tokens[i+1])) ;
   }
 
   return valid ;

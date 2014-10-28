@@ -55,6 +55,6 @@ int main(int args, char** argv) {
   // Create the graph. Connect the pins
   result = create_graph();
   //print_graph();
-  result = bfs_on_graph();
+  result = bfs_on_graph_fwd();
 
 }

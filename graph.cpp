@@ -115,7 +115,7 @@ void search_indicies() {
 
 }
 
-int bfs_on_graph() {
+int bfs_on_graph_fwd() {
 
   /* For forward traversal level 0 is PIs' connections */
   vector<NetPin> fwdLevel0;
@@ -152,12 +152,15 @@ int bfs_on_graph() {
           cout << "Calling interpolation" << endl;
         else
           cout << "Do something else!" << endl;
-/*
+
         int number_of_arcs = Cells[i->cellType].timingArcs.size();
-        if ( number_of_arcs ) {
+  /*      if ( number_of_arcs ) {
           for (  int j = 0; j < number_of_arcs; j++ ) {
-            if ( Cells[i->cellType].timingArcs[j].fromPin == i->pinName && !Cells[i->cellType].timingArcs[j].fallDelay.loadIndices.empty() )
-              cout << "Cell type: " << Cells[i->cellType].timingArcs[j].fallDelay.loadIndices[4] << endl; // Binary search here
+            cout << "From ---> To" << endl;
+            cout << Cells[i->cellType].timingArcs[j].fromPin << endl;
+            cout << Cells[i->cellType].timingArcs[j].toPin << endl << endl;
+//            if ( Cells[i->cellType].timingArcs[j].fromPin == i->pinName && !Cells[i->cellType].timingArcs[j].fallDelay.loadIndices.empty() )
+//              cout << "Cell type: " << Cells[i->cellType].timingArcs[j].fallDelay.loadIndices[4] << endl; // Binary search here
           }
         }
 */
@@ -172,5 +175,12 @@ int bfs_on_graph() {
     
   }
   return 1;
+
+}
+
+int bfs_on_graph_bwd() {
+
+
+
 
 }
