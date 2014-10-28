@@ -1,0 +1,76 @@
+digraph fwd {
+graph [rankdir=LR,fontsize=10];
+subgraph clusteru4{
+	u4o;
+	u4a;
+	u4b;
+	label = "u4";
+}
+subgraph clusterf1{
+	f1q;
+	f1d;
+	f1ck;
+	label = "f1";
+}
+subgraph clusteru1{
+	u1o;
+	u1a;
+	u1b;
+	label = "u1";
+}
+subgraph clusteru2{
+	u2o;
+	u2a;
+	label = "u2";
+}
+subgraph clusteru3{
+	u3o;
+	u3a;
+	label = "u3";
+}
+subgraph clusterPIs {
+color=palegreen;
+node [shape=box,color=palegreen,fontsize=10];
+label="Primary Inputs";
+	inp2;
+	tau2015_clk;
+	inp1;
+}
+subgraph clusterPOs {
+color=salmon;
+node [shape=box,color=salmon,fontsize=10];
+label="Primary Outputs";
+	out;
+}
+	inp2->u1b;
+	u1b[color=aliceblue,style=filled,fontsize=10]
+	tau2015_clk->f1ck;
+	f1ck[color=aliceblue,style=filled,fontsize=10]
+	inp1->u1a;
+	u1a[color=aliceblue,style=filled,fontsize=10]
+	u1o[color=powderblue,style=filled,fontsize=10]
+	u1b->u1o;
+	f1q[color=powderblue,style=filled,fontsize=10]
+	f1ck->f1q;
+	u1o[color=powderblue,style=filled,fontsize=10]
+	u1a->u1o;
+	u4a[color=lightskyblue,style=filled,fontsize=10]
+	u1o->u4a;
+	u2a[color=lightskyblue,style=filled,fontsize=10]
+	f1q->u2a;
+	u4b[color=lightskyblue,style=filled,fontsize=10]
+	f1q->u4b;
+	u4o[color=deepskyblue,style=filled,fontsize=10]
+	u4a->u4o;
+	u2o[color=deepskyblue,style=filled,fontsize=10]
+	u2a->u2o;
+	u4o[color=deepskyblue,style=filled,fontsize=10]
+	u4b->u4o;
+	f1d[color=cornflowerblue,style=filled,fontsize=10]
+	u4o->f1d;
+	u3a[color=cornflowerblue,style=filled,fontsize=10]
+	u2o->u3a;
+	u3o[color=royalblue,style=filled,fontsize=10]
+	u3a->u3o;
+	u3o->out;
+}
