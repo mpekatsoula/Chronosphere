@@ -1,0 +1,10 @@
+BFS: wait for in-cell connections. Must move on only if all previous are finished
+
+Check if we need to remove fromPin, toPin info inside Nets hash table.
+
+
+Gia to ka8e pinaki koitas to linksto. To delay einai to a8roisma olwn twn C olwn twn linksto tou linksto. Ayto to C einai to 
+    pin ("a") {
+      capacitance : 1.00 ;  <----
+      direction : input ;
+    }

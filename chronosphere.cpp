@@ -8,7 +8,7 @@
 
 extern std::unordered_map <string, LibParserCellInfo> Cells;
 extern std::unordered_map <string, VerParserPinInfo> Pins;
-extern std::unordered_map <string, NetParserInfo> Nets;
+extern std::unordered_map <string, NetParserInfo> NetsHelper;
 
 int main(int args, char** argv) {
 
@@ -54,7 +54,7 @@ int main(int args, char** argv) {
 
   // Create the graph. Connect the pins
   result = create_graph();
-  print_graph();
-  //result = bfs_on_graph_fwd();
+  //print_graph();
+  result = bfs_on_graph_fwd();
 
 }

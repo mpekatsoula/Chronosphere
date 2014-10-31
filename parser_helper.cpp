@@ -28,7 +28,7 @@
 /* Global variable that stores Cells */
 std::unordered_map <string, LibParserCellInfo> Cells ;
 std::unordered_map <string, VerParserPinInfo> Pins ;
-std::unordered_map <string, NetParserInfo> Nets ;
+std::unordered_map <string, NetParserInfo> NetsHelper ;
 
 bool is_special_char (char c) {
 
@@ -236,7 +236,7 @@ bool VerilogParser::read_cell_inst (string& cellType, string& cellInstName) {
     newPin.cellType = cellType;
     string key = cellInstName + fromPin;
 
-    Nets[key].output = newPin;
+    NetsHelper[key].output = newPin;
 
     /* Find the pins in order to check if they are clocks or inputs. *
      * In case we find a FF don't connect ck with d                  */
@@ -247,7 +247,7 @@ bool VerilogParser::read_cell_inst (string& cellType, string& cellInstName) {
  
     if ( (cell_fromPin->isInput || cell_fromPin->isClock) && !cell_toPin->isInput ) {
       newPin.pinName = toPin;
-      Nets[key].inputs.push_back(newPin);
+      NetsHelper[key].inputs.push_back(newPin);
     }
 
   }
@@ -268,18 +268,22 @@ bool VerilogParser::read_cell_inst (string& cellType, string& cellInstName) {
   
     /* Create key for Pins hash table */
     string key = cellInstName + pinName;
-    Nets[tokens[i+1]].name = pinName ; // Copy net name
+    NetsHelper[tokens[i+1]].name = pinName ; // Copy net name
 
     // Store net inputs and outputs
     if ( pinInfo.isInput )
-      Nets[tokens[i+1]].inputs.push_back(newPin) ;
+      NetsHelper[tokens[i+1]].inputs.push_back(newPin) ;
     else
-      Nets[tokens[i+1]].output = newPin ;
+      NetsHelper[tokens[i+1]].output = newPin ;
     
     // Store net info inside the Net hash table and 
     // also store the pin to Pin hash table
     Pins[key] = pinInfo;
-
+    Pins[key].connNetName = tokens[i+1];
+    Pins[key].tr_r_early = std::numeric_limits<double>::max();
+    Pins[key].tr_f_early = std::numeric_limits<double>::max();
+    Pins[key].tr_r_late = std::numeric_limits<double>::min();
+    Pins[key].tr_f_late = std::numeric_limits<double>::min();
   }
 
   return valid ;
@@ -1172,7 +1176,7 @@ void test_verilog_parser (string filename) {
     valid = vp.read_primary_input (primaryInput) ;
 
     if (valid)
-      Nets[primaryInput].isPrimaryIn = true ;
+      NetsHelper[primaryInput].isPrimaryIn = true ;
 
 
   } while (valid) ;
@@ -1183,7 +1187,7 @@ void test_verilog_parser (string filename) {
     valid = vp.read_primary_output (primaryOutput) ;
 
     if (valid)
-      Nets[primaryOutput].isPrimaryOut = true ;
+      NetsHelper[primaryOutput].isPrimaryOut = true ;
 
   } while (valid) ;
 

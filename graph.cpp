@@ -10,48 +10,82 @@
 
 extern std::unordered_map <string, LibParserCellInfo> Cells;
 extern std::unordered_map <string, VerParserPinInfo> Pins;
-extern std::unordered_map <string, NetParserInfo> Nets;
+extern std::unordered_map <string, NetParserInfo> NetsHelper;
 std::unordered_map <string, pi_values> PIs;
 std::unordered_map <string, po_values> POs;
+std::unordered_map <string, NetsInfo> Nets;
 
+/* Create Graph and Nets hash table. */
 int create_graph() {
 
-  // Iterate through all nets and create connections on Pins hash table
-  for ( auto it = Nets.begin(); it != Nets.end(); ++it ) {
+  /* Iterate through all nets and create connections on Pins hash table * 
+   * Also make Nets hash table. This will be our primary.               */
+  for ( auto it = NetsHelper.begin(); it != NetsHelper.end(); ++it ) {
     
     string key = (it->second).output.instance_name + (it->second).output.pinName;
+    string NetsKey;
+    NetPin newPin;
 
     /* Store primary inputs and outputs and connect them *
      * to their corresponding pins.                      */
     if ( (it->second).isPrimaryOut ) {
+
+      /* Set values */
       POs[it->first].linkedBy = (it->second).output;
-      NetPin newPin;
+      POs[it->first].tr_r_early = std::numeric_limits<double>::max();
+      POs[it->first].tr_f_early = std::numeric_limits<double>::max();
+      POs[it->first].tr_r_late = std::numeric_limits<double>::min();
+      POs[it->first].tr_f_late = std::numeric_limits<double>::min();
+
       newPin.pinName = it->first;
       newPin.instance_name.clear();
       Pins[key].linksTo.push_back( newPin );
+      
     }
 
     if ( (it->second).isPrimaryIn ) {
+
       PIs[it->first].linksTo = (it->second).inputs; // link primary inputs
       for( std::vector<NetPin>::const_iterator i = (it->second).inputs.begin(); i != (it->second).inputs.end(); ++i) {
         string key3 = i->instance_name + i->pinName;
-        NetPin newPin;
+
+        /* Store info on Nets hash table */
+        NetsKey = it->first + i->instance_name+ i->pinName; // Net name + Cell_instance name & net name of the next pin 
+        Nets[NetsKey].toPin = *i;
+
+        /* Store info on Pins hash table */
         newPin.pinName = it->first;
         newPin.instance_name.clear();
         Pins[key3].linkedBy.push_back(newPin);
       }
+
     }
     
-    if ( !key.empty() )
+    if ( !key.empty() ) {
       Pins[key].linksTo.insert( Pins[key].linksTo.end(), (it->second).inputs.begin(), (it->second).inputs.end() );
 
+      for ( auto i = (it->second).inputs.begin(); i != (it->second).inputs.end(); i++) {
+        /* Store info on Nets hash table */
+        NetsKey = it->first + i->instance_name + i->pinName; // Net name + (Cell_instance name & net name) of the next pin 
+        Nets[NetsKey].toPin = *i;
+        
+      }
 
+    }
 
     /* To store linkedBy information, we need to iterate through every input item and store the output to them *
      * Reminder: Since we create PIs and POs above, we make sure that they are not included in Pins table      */
     for( std::vector<NetPin>::const_iterator i = (it->second).inputs.begin(); i != (it->second).inputs.end() && !(it->second).isPrimaryIn && !(it->second).isPrimaryOut; ++i) {
+
       string key2 = i->instance_name + i->pinName;
       Pins[key2].linkedBy.insert(Pins[key2].linkedBy.end(), it->second.output);
+
+      /* Store Nets fromPin info */
+      for ( auto i2 = Pins[key2].linkedBy.begin(); i2 != Pins[key2].linkedBy.end(); i2++) {
+        NetsKey = it->first + i->instance_name + i->pinName;
+        Nets[NetsKey].fromPin = *i2;
+      }
+
     }
    
 
@@ -81,7 +115,7 @@ int print_graph() {
         cout << "subgraph cluster" << j->instance_name << "{" << endl;
         Visited.insert(Visited.end(), j->instance_name );
 
-        for ( auto i = Nets.begin(); i != Nets.end(); i++ ) {
+        for ( auto i = NetsHelper.begin(); i != NetsHelper.end(); i++ ) {
           for ( auto i2 = (i->second).inputs.begin(); i2 != (i->second).inputs.end(); i2++ ) {
             if ( i2->instance_name == j->instance_name && !(i->second).output.instance_name.empty() ) {    
               string key = i2->instance_name + i2->pinName;
@@ -135,8 +169,6 @@ int print_graph() {
   for ( auto it = PIs.begin(); it != PIs.end(); ++it ) {
 
     fwdLevel0.insert( fwdLevel0.end(), (it->second).linksTo.begin(), (it->second).linksTo.end() );
-
-
 
     for ( std::vector<NetPin>::const_iterator j = (it->second).linksTo.begin(); j != (it->second).linksTo.end(); j++ ) {
       cout << "\t" << it->first << "->" <<  j->instance_name + j->pinName << ";" << endl; 
@@ -216,9 +248,19 @@ void search_indicies() {
 
 int bfs_on_graph_fwd() {
 
+
+
+  for ( auto it = Nets.begin(); it != Nets.end(); ++it ) {
+    cout << "Key: " << it->first << endl << "From instance name: " << (it->second).fromPin.instance_name << " From pinName: " << (it->second).fromPin.pinName << endl;
+    cout << "To instance name: " << (it->second).toPin.instance_name << " to pinName: " << (it->second).toPin.pinName << endl <<endl;
+
+  }
   /* For forward traversal level 0 is PIs' connections */
   vector<NetPin> fwdLevel0;
   vector<string> Visited;
+  unsigned int level = 0;
+
+  // ypologismos Net delay me spef
   for ( auto it = PIs.begin(); it != PIs.end(); ++it )
     fwdLevel0.insert( fwdLevel0.end(), (it->second).linksTo.begin(), (it->second).linksTo.end() );
 
@@ -226,11 +268,11 @@ int bfs_on_graph_fwd() {
   vector<NetPin> currLevel = fwdLevel0;
   vector<NetPin> nextLevel;
   nextLevel.clear();
-  cout << "Printing PIs' connections" << endl;
+
   while ( !isFinalLevel ) {
     
     isFinalLevel = true;
-    cout << " ---------------------------------------------------------- " << endl;
+    cout << " ---------------------------Level" << level <<"------------------------------- " << endl;
   
     /* Start iterating current level */
     for (std::vector<NetPin>::const_iterator i = currLevel.begin(); i != currLevel.end(); ++i) {
@@ -271,7 +313,7 @@ int bfs_on_graph_fwd() {
     /* Clear nextLevel for next iteration */
     currLevel = nextLevel;
     nextLevel.clear();
-    
+    level++;
   }
   return 1;
 

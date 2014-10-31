@@ -397,11 +397,15 @@ struct po_values {
   double early_fall_rat ;
   double late_rise_rat ;
   double late_fall_rat ;
+  double tr_r_early;
+  double tr_f_early;
+  double tr_r_late;
+  double tr_f_late;
   NetPin linkedBy ;
 
   po_values () : early_rise_rat (0.0), early_fall_rat (0.0), late_rise_rat (0.0), late_fall_rat (0.0) {}
 
-};
+} ;
 
 struct pi_values {
 
@@ -409,12 +413,16 @@ struct pi_values {
   double early_fall_at ;
   double late_rise_at ;
   double late_fall_at ;
+  double tr_r_early;
+  double tr_f_early;
+  double tr_r_late;
+  double tr_f_late;
   vector<NetPin> linksTo ;
   NetPin linkedBy ;
 
-  pi_values () : early_rise_at (0.0), early_fall_at (0.0), late_rise_at (0.0), late_fall_at (0.0) {}
+  pi_values () : early_rise_at (0.0), early_fall_at (0.0), late_rise_at (0.0), late_fall_at (0.0), tr_r_early (0.0), tr_f_early (0.0), tr_r_late (0.0), tr_f_late (0.0)  {}
 
-};
+} ;
 
 struct NetParserInfo {
 
@@ -434,12 +442,29 @@ struct VerParserPinInfo {
   double at_late ;
   double rat_early ;
   double rat_late ;
+  double tr_r_early;
+  double tr_f_early;
+  double tr_r_late;
+  double tr_f_late;
   bool isInput ;
+  string connNetName ; // store net name that connects an output pin with an input. We'll need it for the Net key
   vector<NetPin> linksTo ;
   vector<NetPin> linkedBy ;
 
-  VerParserPinInfo () : at_early (0.0), at_late (0.0), rat_early (0.0), rat_late (0.0),  isInput (false) {}
+  VerParserPinInfo () : at_early (0.0), at_late (0.0), rat_early (0.0), rat_late (0.0), isInput (false) {}
 
+} ;
+
+/* Net structure. Every net must be different in order to *
+ * have different delays.                                 */
+struct NetsInfo {
+
+  string netName;
+  NetPin fromPin;
+  NetPin toPin;
+  double delay;
+
+  NetsInfo () : delay (0.0) {}
 } ;
 
 // See test_lib_parser () function in parser_helper.cpp for an
@@ -480,6 +505,7 @@ extern std::unordered_map <string, LibParserCellInfo> Cells;
 extern std::unordered_map <string, VerParserPinInfo> Pins;
 extern std::unordered_map <string, pi_values> PIs;  // primary inputs
 extern std::unordered_map <string, po_values> POs;  // primary outputs
-extern std::unordered_map <string, NetParserInfo> Nets;
+extern std::unordered_map <string, NetParserInfo> NetsHelper; // Helper hash table in order to temporary store the pins' connections
+extern std::unordered_map <string, NetsInfo> Nets;
 
 #endif
