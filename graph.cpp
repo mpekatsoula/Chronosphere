@@ -246,6 +246,7 @@ void search_indicies() {
 
 }
 
+/* BFS algorithm implementation for forward traversal */
 int bfs_on_graph_fwd() {
 
 
@@ -269,6 +270,7 @@ int bfs_on_graph_fwd() {
   vector<NetPin> nextLevel;
   nextLevel.clear();
 
+  /* Begin traversing graph */
   while ( !isFinalLevel ) {
     
     isFinalLevel = true;
@@ -278,13 +280,41 @@ int bfs_on_graph_fwd() {
     for (std::vector<NetPin>::const_iterator i = currLevel.begin(); i != currLevel.end(); ++i) {
 
       string key =  i->instance_name + i->pinName;
-      
+
       /* Build next level. Check if pin is in visited list. TODO: make list bitmap */
       if ( std::find(Visited.begin(), Visited.end(), key) == Visited.end() ) {
         isFinalLevel = false;
 
-        // Insert pin to visited
+        // Insert pin to visited list
         Visited.insert(Visited.end(), key );
+
+        std::vector<LibParserPinInfo>::iterator tempPin  = std::find_if( Cells[i->cellType].pins.begin(), Cells[i->cellType].pins.end(),
+                                                                         findPinInfo( i->pinName ) );      
+        /* Calculate Nets delay. For in-cell connections the delay  */
+        if ( !i->cellType.empty() ) {
+        if ( !tempPin->isInput ) {
+          
+        }
+        else {
+
+          for ( auto j = Pins[key].linksTo.begin(); j != Pins[key].linksTo.end(); j++ ) {
+      
+            /* Make key for Nets hash table. */
+            string nextPkey = j->instance_name + j->pinName;
+            string netkey = key + j->instance_name + j->pinName;
+
+            /* C is the sum of all the nodes linked to, to the pin we are looking at */
+            for ( auto j2 = Pins[nextPkey].linksTo.begin(); j2 != Pins[nextPkey].linksTo.end(); j2++ ) {
+              /* If cellType is empty, then we are looking at a net that connects an primary output */
+              if ( j2->cellType.empty() )
+                continue; 
+              std::vector<LibParserPinInfo>::iterator cellPin  = std::find_if( Cells[j2->cellType].pins.begin(), Cells[j2->cellType].pins.end(),
+                                                                               findPinInfo( j2->pinName ) );             
+              Nets[netkey].delay += cellPin->capacitance;
+              
+            }
+          }
+        }}
 
         /* If pin is input, that means that it is connected in-cell. *
          * So we need to call interpolation/extrapolation functions, *
@@ -315,6 +345,10 @@ int bfs_on_graph_fwd() {
     nextLevel.clear();
     level++;
   }
+
+  for ( auto i = Nets.begin(); i != Nets.end(); i++ ) 
+      cout << "Net: " << i->first << " Cap: " << (i->second).delay << endl;
+
   return 1;
 
 }
