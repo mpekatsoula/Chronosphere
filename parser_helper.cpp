@@ -29,6 +29,7 @@
 std::unordered_map <string, LibParserCellInfo> Cells ;
 std::unordered_map <string, VerParserPinInfo> Pins ;
 std::unordered_map <string, NetParserInfo> NetsHelper ;
+std::unordered_map <string, SpefNet> SpefNets;
 
 bool is_special_char (char c) {
 
@@ -617,7 +618,7 @@ void SpefParser::read_resistances (vector<SpefResistance>& resistances) {
 // Return value indicates if the last read was successful or not.  
 bool SpefParser::read_net_data (SpefNet& spefNet) {
 
-  spefNet.clear() ;
+  //spefNet.clear() ;
 
   vector<string> tokens ;
   bool valid = read_line_as_tokens (is, tokens, true /*include special chars*/) ;
@@ -625,13 +626,13 @@ bool SpefParser::read_net_data (SpefNet& spefNet) {
   // Read until a valid D_NET line is found
   while (valid) {
     if (tokens.size() == 4 && tokens[0] == "*" && tokens[1] == "D_NET") {
-      spefNet.netName = tokens[2] ;
-      spefNet.netLumpedCap = std::atof(tokens[3].c_str()) ;
+      SpefNets[tokens[2]].netName = tokens[2] ;
+      SpefNets[tokens[2]].netLumpedCap = std::atof(tokens[3].c_str()) ;
 
-      bool readConns = read_connections (spefNet.connections) ;
+      bool readConns = read_connections (SpefNets[tokens[2]].connections) ;
       if (readConns) {
-	read_capacitances (spefNet.capacitances) ;
-	read_resistances (spefNet.resistances) ;
+	      read_capacitances (SpefNets[tokens[2]].capacitances) ;
+	      read_resistances (SpefNets[tokens[2]].resistances) ;
       }
 
       return true ;
@@ -1169,7 +1170,7 @@ void test_verilog_parser (string filename) {
   bool valid = vp.read_module (moduleName) ;
   assert (valid) ;
   
-  cout << "Module " << moduleName << endl ;
+  //cout << "Module " << moduleName << endl ;
 
   do {
     string primaryInput ;
@@ -1202,7 +1203,7 @@ void test_verilog_parser (string filename) {
   } while (valid) ;
 
 
-  cout << endl ;
+  //cout << endl ;
   //cout << "Cell insts: " << std::endl ;
   
   do {
@@ -1310,13 +1311,13 @@ void test_spef_parser (string filename) {
   SpefNet spefNet ;
   bool valid = sp.read_net_data (spefNet) ;
 
-  int readCnt = 0 ;
+  //int readCnt = 0 ;
   while (valid) {
 
-    ++readCnt ;
+    //++readCnt ;
 
     // print out the contents of the spefNet just read
-    cout << "Net: " << spefNet.netName << endl ;
+    /*cout << "Net: " << spefNet.netName << endl ;
     cout << "Net lumped cap: " << spefNet.netLumpedCap << endl ;
 
     cout << "Connections: " << endl ;
@@ -1334,11 +1335,11 @@ void test_spef_parser (string filename) {
       cout << spefNet.resistances[i] << endl ;
     }
 
-    cout << endl ;
+    cout << endl ;*/
     valid = sp.read_net_data (spefNet) ;
   }
 
-  cout << "Read " << readCnt << " nets in the spef file." << endl ;
+  //cout << "Read " << readCnt << " nets in the spef file." << endl ;
 }
 
 // Example function that uses TimingParser class to parse the given ISPD-13 timing
@@ -1425,15 +1426,15 @@ void test_lib_parser (string filename) {
   bool valid = lp.read_default_max_transition(maxTransition) ;
 
   assert (valid) ;
-  cout << "The default max transition defined is " << maxTransition << endl ;
+ // cout << "The default max transition defined is " << maxTransition << endl ;
 
-  int readCnt = 0 ;
+  //int readCnt = 0 ;
   do {
     LibParserCellInfo cell ;
     valid = lp.read_cell_info (cell) ;
 
     if (valid) {
-      ++readCnt ;
+      //++readCnt ;
 
       /* Store cell to hash table */
       Cells[cell.name] = cell;
@@ -1442,14 +1443,14 @@ void test_lib_parser (string filename) {
         
   } while (valid) ;
 
-  cout << "Read " << readCnt << " number of library cells" << endl ;
+  //cout << "Read " << readCnt << " number of library cells" << endl ;
 }
 
 
 int wake_parser(string filetype, string filename) {
 
   if (filetype == string("verilog")) {
-    cout << "Parsing verilog..." << endl ;
+   // cout << "Parsing verilog..." << endl ;
     test_verilog_parser(filename) ;
     cout << "Finished parsing verilog." << endl ;    
   } 
@@ -1459,7 +1460,7 @@ int wake_parser(string filetype, string filename) {
     cout << "Finished parsing sdc." << endl ;
   }
   else if (filetype == string("spef")) {
-    cout << "Parsing spef..." << endl ;  
+    //cout << "Parsing spef..." << endl ;  
     test_spef_parser (filename) ;
     cout << "Finished parsing spef." << endl ;
   }
@@ -1474,7 +1475,7 @@ int wake_parser(string filetype, string filename) {
     cout << "Finished parsing ceff." << endl ;
   }
   else if (filetype == string("lib")) {
-    cout << "Parsing lib..." << endl ;
+    //cout << "Parsing lib..." << endl ;
     test_lib_parser (filename) ;
     cout << "Finished parsing lib." << endl ;
   }

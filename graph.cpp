@@ -8,9 +8,11 @@
 #include "parser_helper.h"
 #include "graph.h"
 
+/* Hash tables */
 extern std::unordered_map <string, LibParserCellInfo> Cells;
 extern std::unordered_map <string, VerParserPinInfo> Pins;
 extern std::unordered_map <string, NetParserInfo> NetsHelper;
+extern std::unordered_map <string, SpefNet> SpefNets;
 std::unordered_map <string, pi_values> PIs;
 std::unordered_map <string, po_values> POs;
 std::unordered_map <string, NetsInfo> Nets;
@@ -40,7 +42,13 @@ int create_graph() {
       newPin.pinName = it->first;
       newPin.instance_name.clear();
       Pins[key].linksTo.push_back( newPin );
-      
+
+      /* Store primary outputs to Nets hash table */
+      NetsKey = it->first; // Net name, output
+      Nets[NetsKey].netName = NetsKey;
+      Nets[NetsKey].fromPin = newPin;
+
+
     }
 
     if ( (it->second).isPrimaryIn ) {
@@ -52,6 +60,7 @@ int create_graph() {
         /* Store info on Nets hash table */
         NetsKey = it->first + i->instance_name+ i->pinName; // Net name + Cell_instance name & net name of the next pin 
         Nets[NetsKey].toPin = *i;
+        Nets[NetsKey].netName = it->first;
 
         /* Store info on Pins hash table */
         newPin.pinName = it->first;
@@ -68,7 +77,7 @@ int create_graph() {
         /* Store info on Nets hash table */
         NetsKey = it->first + i->instance_name + i->pinName; // Net name + (Cell_instance name & net name) of the next pin 
         Nets[NetsKey].toPin = *i;
-        
+        Nets[NetsKey].netName = it->first;
       }
 
     }
@@ -84,6 +93,7 @@ int create_graph() {
       for ( auto i2 = Pins[key2].linkedBy.begin(); i2 != Pins[key2].linkedBy.end(); i2++) {
         NetsKey = it->first + i->instance_name + i->pinName;
         Nets[NetsKey].fromPin = *i2;
+        Nets[NetsKey].netName = it->first;
       }
 
     }
@@ -246,16 +256,109 @@ void search_indicies() {
 
 }
 
+/* Find delay on Nets */
+int find_nets_delay() {
+
+  for ( auto it = Nets.begin(); it != Nets.end(); ++it ) {
+
+    /* Find information */
+    string cellType = (it->second).fromPin.cellType;
+    string pinName = (it->second).fromPin.pinName;
+    string instance_name = (it->second).fromPin.instance_name;
+    string netName = it->second.netName;
+
+    /* If Cell type is empty, we are either connecting a primary input or a primary output with a pin */
+    if ( cellType.empty() ) {
+      double total_res = 0;
+      double total_cap = 0;
+      for ( auto j = SpefNets[netName].resistances.begin(); j != SpefNets[netName].resistances.end(); j++ ) {
+
+        /* Maybe the net is input to two or more pins. We check this here */
+        if ( j->toNodeName.n1 == netName || j->toNodeName.n1 == (it->second).toPin.instance_name ) {
+          total_cap += j->resistance;
+          /* Find next resistance */ 
+          for ( auto j2 = SpefNets[netName].capacitances.begin(); j2 != SpefNets[netName].capacitances.end(); j2++ )
+            if ( j2->nodeName.n1 == j->toNodeName.n1 && j2->nodeName.n2 == j->toNodeName.n2 ){
+              total_res += total_cap*j2->capacitance;
+              break;            
+            }
+        }
+      }
+      /* Store capacitance to Nets hjash table */
+      Nets[it->first].delay = total_res;
+
+      continue;
+    }
+
+    auto tempPin = find_if( Cells[cellType].pins.begin(), Cells[cellType].pins.end(), findPinInfo( pinName ) );      
+      
+    /* Calculate nets capacitance */
+    if ( !tempPin->isInput ) {
+      if ( netName.empty() ) 
+        continue;
+
+      double total_res = 0;
+      double total_cap = 0;
+      for ( auto j = SpefNets[netName].resistances.begin(); j != SpefNets[netName].resistances.end(); j++ ) {
+
+        /* Maybe the net is input to two or more pins. We check this here */
+        if ( j->toNodeName.n1 == netName || j->toNodeName.n1 == (it->second).toPin.instance_name ) {
+          total_cap += j->resistance;
+          /* Find next resistance */ 
+          for ( auto j2 = SpefNets[netName].capacitances.begin(); j2 != SpefNets[netName].capacitances.end(); j2++ )
+            if ( j2->nodeName.n1 == j->toNodeName.n1 && j2->nodeName.n2 == j->toNodeName.n2 ){
+              total_res += total_cap*j2->capacitance;
+              break;            
+            }
+        }
+      }
+      /* Store capacitance to Nets hjash table */
+      Nets[it->first].delay = total_res;
+    }
+    else {
+            
+      string key = instance_name + pinName;
+      for ( auto j = Pins[key].linksTo.begin(); j != Pins[key].linksTo.end(); j++ ) {
+        
+        /* Make key for Nets hash table. */
+        string nextPkey = j->instance_name + j->pinName;
+        string netkey = key + j->instance_name + j->pinName;
+
+        /* C is the sum of all the nodes linked to, to the pin we are looking at */
+        for ( auto j2 = Pins[nextPkey].linksTo.begin(); j2 != Pins[nextPkey].linksTo.end(); j2++ ) {
+
+          /* If cellType is empty, then we are looking at a net that connects an primary output */
+          if ( j2->cellType.empty() )
+            continue;
+
+          auto cellPin  = find_if( Cells[j2->cellType].pins.begin(), Cells[j2->cellType].pins.end(), findPinInfo( j2->pinName ) );             
+          Nets[netkey].delay += cellPin->capacitance;
+                
+        }
+      }
+    }   
+  }
+
+#ifdef DEBUG
+  for ( auto i = Nets.begin(); i != Nets.end(); i++ ) 
+    cout << "Net: " << i->first << " Cap: " << (i->second).delay << endl;
+#endif
+
+  return 1;
+
+}
+
+
 /* BFS algorithm implementation for forward traversal */
-int bfs_on_graph_fwd() {
+int find_nets_delay_() {
 
 
 
   for ( auto it = Nets.begin(); it != Nets.end(); ++it ) {
     cout << "Key: " << it->first << endl << "From instance name: " << (it->second).fromPin.instance_name << " From pinName: " << (it->second).fromPin.pinName << endl;
     cout << "To instance name: " << (it->second).toPin.instance_name << " to pinName: " << (it->second).toPin.pinName << endl <<endl;
-
   }
+
   /* For forward traversal level 0 is PIs' connections */
   vector<NetPin> fwdLevel0;
   vector<string> Visited;
@@ -290,31 +393,7 @@ int bfs_on_graph_fwd() {
 
         std::vector<LibParserPinInfo>::iterator tempPin  = std::find_if( Cells[i->cellType].pins.begin(), Cells[i->cellType].pins.end(),
                                                                          findPinInfo( i->pinName ) );      
-        /* Calculate Nets delay. For in-cell connections the delay  */
-        if ( !i->cellType.empty() ) {
-        if ( !tempPin->isInput ) {
-          
-        }
-        else {
-
-          for ( auto j = Pins[key].linksTo.begin(); j != Pins[key].linksTo.end(); j++ ) {
-      
-            /* Make key for Nets hash table. */
-            string nextPkey = j->instance_name + j->pinName;
-            string netkey = key + j->instance_name + j->pinName;
-
-            /* C is the sum of all the nodes linked to, to the pin we are looking at */
-            for ( auto j2 = Pins[nextPkey].linksTo.begin(); j2 != Pins[nextPkey].linksTo.end(); j2++ ) {
-              /* If cellType is empty, then we are looking at a net that connects an primary output */
-              if ( j2->cellType.empty() )
-                continue; 
-              std::vector<LibParserPinInfo>::iterator cellPin  = std::find_if( Cells[j2->cellType].pins.begin(), Cells[j2->cellType].pins.end(),
-                                                                               findPinInfo( j2->pinName ) );             
-              Nets[netkey].delay += cellPin->capacitance;
-              
-            }
-          }
-        }}
+ 
 
         /* If pin is input, that means that it is connected in-cell. *
          * So we need to call interpolation/extrapolation functions, *

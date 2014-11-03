@@ -197,6 +197,7 @@ inline ostream& operator<< (ostream& os, const SpefResistance& r) {
 }
 
 struct SpefNet {
+
   string netName ;
   double netLumpedCap ;
   vector<SpefConnection> connections ;
@@ -507,5 +508,6 @@ extern std::unordered_map <string, pi_values> PIs;  // primary inputs
 extern std::unordered_map <string, po_values> POs;  // primary outputs
 extern std::unordered_map <string, NetParserInfo> NetsHelper; // Helper hash table in order to temporary store the pins' connections
 extern std::unordered_map <string, NetsInfo> Nets;
+extern std::unordered_map <string, SpefNet> SpefNets; // Store spef file
 
 #endif

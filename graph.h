@@ -4,7 +4,7 @@
 
 
 int create_graph();
-int bfs_on_graph_fwd();
+int find_nets_delay();
 int bfs_on_graph_bwd();
 int print_graph();
 

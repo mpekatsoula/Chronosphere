@@ -9,6 +9,7 @@
 extern std::unordered_map <string, LibParserCellInfo> Cells;
 extern std::unordered_map <string, VerParserPinInfo> Pins;
 extern std::unordered_map <string, NetParserInfo> NetsHelper;
+extern std::unordered_map <string, SpefNet> SpefNets;
 
 int main(int args, char** argv) {
 
@@ -49,12 +50,12 @@ int main(int args, char** argv) {
   assert(result);
   result = wake_parser("verilog", vfile);
   assert(result);
-  //result = wake_parser("spef", speffile);
-  //assert(result);
+  result = wake_parser("spef", speffile);
+  assert(result);
 
   // Create the graph. Connect the pins
   result = create_graph();
   //print_graph();
-  result = bfs_on_graph_fwd();
+  result = find_nets_delay();
 
 }
