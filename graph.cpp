@@ -372,6 +372,26 @@ double calculate_net_delay( string netName, string instance_name ) {
   return total_res;
 }
 
+/* Input: Next Pin key that is connected to the output pin we are connected to */
+double calculate_fanout( string nextPkey ) {
+
+  double total_capacitance = 0;
+
+  /* C is the sum of all the nodes linked to, to the pin we are looking at */
+  for ( auto j2 = Pins[nextPkey].linksTo.begin(); j2 != Pins[nextPkey].linksTo.end(); j2++ ) {
+
+    /* If cellType is empty, then we are looking at a net that connects an primary output */
+    if ( j2->cellType.empty() )
+    continue;
+
+    auto cellPin  = find_if( Cells[j2->cellType].pins.begin(), Cells[j2->cellType].pins.end(), findPinInfo( j2->pinName ) );             
+    total_capacitance += cellPin->capacitance;
+                      
+  }
+
+  return total_capacitance;
+
+}
 
 /* BFS algorithm implementation for forward traversal */
 int find_nets_delay() {
@@ -379,7 +399,7 @@ int find_nets_delay() {
   string cellType ;
   string pinName;
   string instance_name ;
-  string netName;
+  string NetsKey;
 
   for ( auto it = Nets.begin(); it != Nets.end(); ++it ) {
     cout << "Key: " << it->first << endl << "From instance name: " << (it->second).fromPin.instance_name << " From pinName: " << (it->second).fromPin.pinName << endl;
@@ -398,7 +418,7 @@ int find_nets_delay() {
     /* Calculate delay for all inputs */
     for ( auto k = (it->second).linksTo.begin(); k != (it->second).linksTo.end(); k++ ) {
 
-      string NetsKey = it->first + k->instance_name + k->pinName;
+      NetsKey = it->first + k->instance_name + k->pinName;
       /* Calculate and store delay to Nets hash table */
       Nets[NetsKey].delay = calculate_net_delay( it->first, k->instance_name);
 
@@ -438,7 +458,17 @@ int find_nets_delay() {
          * else calculate delay with wire capacitances               */
         if ( Pins[key].isInput ) {
 
-          
+          /* For is not needed because we only have one in-cell *
+           * connection but makes our life easier cause we      * 
+           * don't have to check if list is empty manually      */
+          for ( auto j = Pins[key].linksTo.begin(); j != Pins[key].linksTo.end(); j++ ) {
+            
+            /* Make key for Nets hash table. */
+            string nextPkey = j->instance_name + j->pinName;
+            string netkey = key + j->instance_name + j->pinName;
+
+            double fan_out = calculate_fanout( nextPkey );
+          }
 
         }
         else {
@@ -446,7 +476,11 @@ int find_nets_delay() {
           /* Iterate through all connections and calculate total delay. */
           for ( auto k = Pins[key].linksTo.begin(); k != Pins[key].linksTo.end(); k++ ) {
 
-            string NetsKey = Pins[key].connNetName + k->instance_name + k->pinName;
+            if ( k->instance_name.empty() ) // primary output
+              NetsKey = Pins[key].connNetName ;
+            else
+              NetsKey = Pins[key].connNetName + k->instance_name + k->pinName;
+
             /* Calculate and store delay to Nets hash table */
             Nets[NetsKey].delay = calculate_net_delay( Pins[key].connNetName , k->instance_name);
 
