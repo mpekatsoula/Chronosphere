@@ -257,7 +257,7 @@ void search_indicies() {
 }
 
 /* Find delay on Nets */
-int find_nets_delay() {
+int find_nets_delay_() {
 
   for ( auto it = Nets.begin(); it != Nets.end(); ++it ) {
 
@@ -284,7 +284,7 @@ int find_nets_delay() {
             }
         }
       }
-      /* Store capacitance to Nets hjash table */
+      /* Store capacitance to Nets hash table */
       Nets[it->first].delay = total_res;
 
       continue;
@@ -312,7 +312,7 @@ int find_nets_delay() {
             }
         }
       }
-      /* Store capacitance to Nets hjash table */
+      /* Store delay to Nets hash table */
       Nets[it->first].delay = total_res;
     }
     else {
@@ -348,11 +348,38 @@ int find_nets_delay() {
 
 }
 
+double calculate_net_delay( string netName, string instance_name ) {
+
+  double total_res = 0;
+  double total_cap = 0;
+
+  for ( auto j = SpefNets[netName].resistances.begin(); j != SpefNets[netName].resistances.end(); j++ ) {
+
+    /* Maybe the net is input to two or more pins. We check this here */
+    if ( j->toNodeName.n1 == netName || j->toNodeName.n1 == instance_name ) {
+
+      total_cap += j->resistance;
+      /* Find next resistance */ 
+      for ( auto j2 = SpefNets[netName].capacitances.begin(); j2 != SpefNets[netName].capacitances.end(); j2++ )
+        if ( j2->nodeName.n1 == j->toNodeName.n1 && j2->nodeName.n2 == j->toNodeName.n2 ){
+          total_res += total_cap*j2->capacitance;
+          break;            
+      }
+
+    }
+  }
+
+  return total_res;
+}
+
 
 /* BFS algorithm implementation for forward traversal */
-int find_nets_delay_() {
+int find_nets_delay() {
 
-
+  string cellType ;
+  string pinName;
+  string instance_name ;
+  string netName;
 
   for ( auto it = Nets.begin(); it != Nets.end(); ++it ) {
     cout << "Key: " << it->first << endl << "From instance name: " << (it->second).fromPin.instance_name << " From pinName: " << (it->second).fromPin.pinName << endl;
@@ -365,8 +392,20 @@ int find_nets_delay_() {
   unsigned int level = 0;
 
   // ypologismos Net delay me spef
-  for ( auto it = PIs.begin(); it != PIs.end(); ++it )
+  for ( auto it = PIs.begin(); it != PIs.end(); it++ ) {
     fwdLevel0.insert( fwdLevel0.end(), (it->second).linksTo.begin(), (it->second).linksTo.end() );
+
+    /* Calculate delay for all inputs */
+    for ( auto k = (it->second).linksTo.begin(); k != (it->second).linksTo.end(); k++ ) {
+
+      string NetsKey = it->first + k->instance_name + k->pinName;
+      /* Calculate and store delay to Nets hash table */
+      Nets[NetsKey].delay = calculate_net_delay( it->first, k->instance_name);
+
+    }
+   
+  }
+
 
   bool isFinalLevel = false;
   vector<NetPin> currLevel = fwdLevel0;
@@ -377,8 +416,7 @@ int find_nets_delay_() {
   while ( !isFinalLevel ) {
     
     isFinalLevel = true;
-    cout << " ---------------------------Level" << level <<"------------------------------- " << endl;
-  
+
     /* Start iterating current level */
     for (std::vector<NetPin>::const_iterator i = currLevel.begin(); i != currLevel.end(); ++i) {
 
@@ -397,11 +435,25 @@ int find_nets_delay_() {
 
         /* If pin is input, that means that it is connected in-cell. *
          * So we need to call interpolation/extrapolation functions, *
-         * else do  */
-        if ( Pins[key].isInput )
-          cout << "Calling interpolation" << endl;
-        else
-          cout << "Do something else!" << endl;
+         * else calculate delay with wire capacitances               */
+        if ( Pins[key].isInput ) {
+
+          
+
+        }
+        else {
+
+          /* Iterate through all connections and calculate total delay. */
+          for ( auto k = Pins[key].linksTo.begin(); k != Pins[key].linksTo.end(); k++ ) {
+
+            string NetsKey = Pins[key].connNetName + k->instance_name + k->pinName;
+            /* Calculate and store delay to Nets hash table */
+            Nets[NetsKey].delay = calculate_net_delay( Pins[key].connNetName , k->instance_name);
+
+          }
+
+        }
+
 
         int number_of_arcs = Cells[i->cellType].timingArcs.size();
   /*      if ( number_of_arcs ) {
@@ -426,7 +478,7 @@ int find_nets_delay_() {
   }
 
   for ( auto i = Nets.begin(); i != Nets.end(); i++ ) 
-      cout << "Net: " << i->first << " Cap: " << (i->second).delay << endl;
+      cout << "Net: " << i->first << " delay: " << (i->second).delay << endl;
 
   return 1;
 
