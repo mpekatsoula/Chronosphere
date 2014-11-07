@@ -373,7 +373,7 @@ double calculate_net_delay( string netName, string instance_name ) {
 }
 
 /* Input: Next Pin key that is connected to the output pin we are connected to */
-double calculate_fanout( string nextPkey ) {
+double calculate_fanout( string nextPkey, string spefKey ) {
 
   double total_capacitance = 0;
 
@@ -389,7 +389,132 @@ double calculate_fanout( string nextPkey ) {
                       
   }
 
-  return total_capacitance;
+  /* Also add the net capacitance */
+  return total_capacitance + SpefNets[spefKey].netLumpedCap ;
+
+}
+
+
+double BilinearInterpol ( double index1, double index2, string cellName, string pinName, int type ) {
+
+  double result = 0;
+  int x1;
+  int x2;
+  int y1;
+  int y2;
+  std::vector<double>::iterator low1;
+  std::vector<double>::iterator low2;
+
+  auto tempPin = std::find_if( Cells[cellName].pins.begin(), Cells[cellName].pins.end(), findPinInfo( pinName ) );      
+  auto timingArc = std::find_if ( Cells[cellName].timingArcs.begin(), Cells[cellName].timingArcs.end(), findTimingArchPin( pinName ));
+
+  /* Types: 0 -> riseTransition *
+   *        1 -> fallTransition * 
+   *        2 -> riseDelay      *
+   *        3 -> fallDelay      */
+  LibParserLUT lut;
+  switch ( type ) {
+
+    case 0:
+      lut = timingArc->riseTransition;
+    break;
+    
+    case 1:
+      lut = timingArc->fallTransition;
+    break;
+
+    case 2:
+      lut = timingArc->riseDelay;
+    break;
+
+    case 3:
+      lut = timingArc->fallDelay;
+    break;
+
+  }
+
+  /* Binary search for indices */
+  low1 = std::lower_bound (lut.loadIndices.begin(), lut.loadIndices.end(), index1 );
+  low2 = std::lower_bound (lut.transitionIndices.begin(), lut.transitionIndices.end(), index2 );
+  x1 = low1 - lut.loadIndices.begin();
+  y1 = low2 - lut.transitionIndices.begin();
+
+  /* Special cases for index1 */
+  if ( low1 == lut.loadIndices.end() ) {
+    x1 = x1 - 2;
+    x2 = x1 + 1;
+  }
+  else if ( lut.loadIndices[x1] == index1 ) {
+    x2 = x1;
+  }
+  else if ( low1 == lut.loadIndices.begin() ) {
+    x2 = x1 + 1;
+  }
+  else {
+    x2 = x1;
+    x1--;
+  }
+
+  /* Special cases for index2 */
+  if ( low2 == lut.transitionIndices.end() ) {
+    y1 = y1 - 2;
+    y2 = y1 + 1;
+  }
+  else if ( lut.transitionIndices[y1] == index2 ) {
+    y2 = y1;
+  }
+  else if ( low2 == lut.transitionIndices.begin() ) {
+    y2 = y1 + 1;
+  }
+  else {
+    y2 = y1;
+    y1--;
+  }
+
+#ifdef DEBUG
+  cout << "Type: " << type << endl;
+  cout << "Cell: " << cellName <<  " Index 1 is : " << index1 << " lower bound: [" << x1 << "," << x2 << "] --> [" << lut.loadIndices[x1] << "," << lut.loadIndices[x2] << "]" << endl;
+  cout << "Cell: " << cellName <<  " Index 2 is : " << index2 << " lower bound: [" << y1 << "," << y2 << "] --> [" << lut.transitionIndices[y1] << "," << lut.transitionIndices[y2] << "]" << endl;
+#endif
+
+  if ( x1 == x2 && y1 == y2 ) {
+
+    result = lut.tableVals[y1][x1];
+
+  }
+  else if ( x1 == x2 && y1 != y2 ) {
+
+    result = (lut.tableVals[y2][x1] - lut.tableVals[y1][x1]);
+    result = result/( lut.transitionIndices[y2] - lut.transitionIndices[y1] );
+    result = lut.tableVals[y1][x1] + ( index2 - lut.transitionIndices[y1] )*result;
+
+  } 
+  else if ( x1 != x2 && y1 == y2 ) {
+
+    result = (lut.tableVals[y1][x2] - lut.tableVals[y1][x1]);
+    result = result/( lut.loadIndices[x2] - lut.loadIndices[x1] );
+    result = lut.tableVals[y1][x1] + ( index1 - lut.loadIndices[x1] )*result;
+
+  } 
+  else if ( x1 != x2 && y1 != y2 ) {
+
+    double z_first, z_sec;
+
+    z_first = (lut.tableVals[y1][x2] - lut.tableVals[y1][x1]);
+    z_first = z_first/( lut.loadIndices[x2] - lut.loadIndices[x1] );
+    z_first = lut.tableVals[y1][x1] + ( index1 - lut.loadIndices[x1] )*z_first;
+
+    z_sec = (lut.tableVals[y2][x2] - lut.tableVals[y2][x1]);
+    z_sec = z_sec/( lut.loadIndices[x2] - lut.loadIndices[x1] );
+    z_sec = lut.tableVals[y2][x1] + ( index1 - lut.loadIndices[x1] )*z_sec;
+
+    result = (z_sec - z_first);
+    result = result/( lut.transitionIndices[y2] - lut.transitionIndices[y1] );
+    result = z_first + ( index2 - lut.transitionIndices[y1] )*result;
+
+  } 
+
+  return result;
 
 }
 
@@ -401,10 +526,14 @@ int find_nets_delay() {
   string instance_name ;
   string NetsKey;
 
+#ifdef DEBUG
+
   for ( auto it = Nets.begin(); it != Nets.end(); ++it ) {
     cout << "Key: " << it->first << endl << "From instance name: " << (it->second).fromPin.instance_name << " From pinName: " << (it->second).fromPin.pinName << endl;
     cout << "To instance name: " << (it->second).toPin.instance_name << " to pinName: " << (it->second).toPin.pinName << endl <<endl;
   }
+
+#endif
 
   /* For forward traversal level 0 is PIs' connections */
   vector<NetPin> fwdLevel0;
@@ -425,7 +554,6 @@ int find_nets_delay() {
     }
    
   }
-
 
   bool isFinalLevel = false;
   vector<NetPin> currLevel = fwdLevel0;
@@ -458,18 +586,47 @@ int find_nets_delay() {
          * else calculate delay with wire capacitances               */
         if ( Pins[key].isInput ) {
 
+          double fan_out;
+          string nxtKey;
+
           /* For is not needed because we only have one in-cell *
            * connection but makes our life easier cause we      * 
            * don't have to check if list is empty manually      */
           for ( auto j = Pins[key].linksTo.begin(); j != Pins[key].linksTo.end(); j++ ) {
             
             /* Make key for Nets hash table. */
-            string nextPkey = j->instance_name + j->pinName;
+            nxtKey = j->instance_name + j->pinName;
             string netkey = key + j->instance_name + j->pinName;
 
-            double fan_out = calculate_fanout( nextPkey );
+            fan_out = calculate_fanout( nxtKey, Pins[nxtKey].connNetName );
+
+          }
+      
+          if ( Pins[key].linkedBy.empty() ) {
+            printf("Error. Linked by empty!\n");
+            exit(0);
           }
 
+          string prevKey =  Pins[key].linkedBy[0].instance_name + Pins[key].linkedBy[0].pinName;
+          string cellName = i->cellType;
+
+          /* Find min - max */
+          Pins[key].tr_r_early = std::min( Pins[key].tr_r_early, Pins[prevKey].tr_r_early );
+          Pins[key].tr_f_early = std::min( Pins[key].tr_f_early, Pins[prevKey].tr_f_early );
+          Pins[key].tr_r_late = std::max( Pins[key].tr_r_early, Pins[prevKey].tr_r_early );
+          Pins[key].tr_f_late = std::max( Pins[key].tr_f_early, Pins[prevKey].tr_f_early );
+
+          /* Call interpolation */
+          Pins[nxtKey].tr_r_early = BilinearInterpol( 17, Pins[key].tr_r_early, cellName,  i->pinName, 0 );
+          Pins[nxtKey].tr_f_early = BilinearInterpol( fan_out, Pins[key].tr_f_early, cellName, i->pinName, 1 );
+          Pins[nxtKey].tr_r_late = BilinearInterpol( fan_out, Pins[key].tr_r_late, cellName, i->pinName, 0 );
+          Pins[nxtKey].tr_f_late = BilinearInterpol( fan_out, Pins[key].tr_f_late, cellName, i->pinName, 1 );
+/*
+          Nets[nxtKey].dr_EARLY = BilinearInterpol( fan_out, Pins[key].tr_r_early, cellName,  i->pinName, 2 );
+          Nets[nxtKey].df_EARLY = BilinearInterpol( fan_out, Pins[key].tr_f_early, cellName, i->pinName, 3 );
+          Nets[nxtKey].dr_LATE = BilinearInterpol( fan_out, Pins[key].tr_r_late, cellName, i->pinName, 2 );
+          Nets[nxtKey].df_LATE = BilinearInterpol( fan_out, Pins[key].tr_f_late, cellName, i->pinName, 3 );
+*/
         }
         else {
 
@@ -488,19 +645,6 @@ int find_nets_delay() {
 
         }
 
-
-        int number_of_arcs = Cells[i->cellType].timingArcs.size();
-  /*      if ( number_of_arcs ) {
-          for (  int j = 0; j < number_of_arcs; j++ ) {
-            cout << "From ---> To" << endl;
-            cout << Cells[i->cellType].timingArcs[j].fromPin << endl;
-            cout << Cells[i->cellType].timingArcs[j].toPin << endl << endl;
-//            if ( Cells[i->cellType].timingArcs[j].fromPin == i->pinName && !Cells[i->cellType].timingArcs[j].fallDelay.loadIndices.empty() )
-//              cout << "Cell type: " << Cells[i->cellType].timingArcs[j].fallDelay.loadIndices[4] << endl; // Binary search here
-          }
-        }
-*/
-        cout << key << endl << endl << endl;
         nextLevel.insert( nextLevel.end(), Pins[key].linksTo.begin(), Pins[key].linksTo.end() );
       }
     }
@@ -513,7 +657,8 @@ int find_nets_delay() {
 
   for ( auto i = Nets.begin(); i != Nets.end(); i++ ) 
       cout << "Net: " << i->first << " delay: " << (i->second).delay << endl;
-
+  for ( auto i = SpefNets.begin(); i != SpefNets.end(); i++ ) 
+    cout << " sssssD: " << i->first << " delay: " << (i->second).netLumpedCap << endl;
   return 1;
 
 }

@@ -384,6 +384,14 @@ struct findPinInfo  {
     }
 } ;
 
+struct findTimingArchPin  {
+    string name ;
+    findTimingArchPin( string name ):name(name) { }
+    bool operator()(const LibParserTimingInfo& m) const {
+        return m.fromPin == name;
+    }
+} ;
+
 struct NetPin {
 
   string instance_name ;
@@ -464,6 +472,10 @@ struct NetsInfo {
   NetPin fromPin;
   NetPin toPin;
   double delay;
+  double dr_EARLY;
+  double df_EARLY;
+  double dr_LATE;
+  double df_LATE;
 
   NetsInfo () : delay (0.0) {}
 } ;

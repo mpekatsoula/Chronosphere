@@ -4,7 +4,7 @@ CFLAGS = -c -O3 -std=c++0x
 SOURCES = parser_helper.cpp graph.cpp chronosphere.cpp
 OBJECTS = $(SOURCES:.cpp=.o)
 
-ifeq ($(debug),yes)
+ifeq ($(debug),true)
 CFLAGS += -DDEBUG
 endif
 
