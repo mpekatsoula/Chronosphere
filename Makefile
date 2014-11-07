@@ -5,7 +5,7 @@ SOURCES = parser_helper.cpp graph.cpp chronosphere.cpp
 OBJECTS = $(SOURCES:.cpp=.o)
 
 ifeq ($(debug),true)
-CFLAGS += -DDEBUG
+CFLAGS += -g -DDEBUG
 endif
 
 EXECUTABLE = chronosphere

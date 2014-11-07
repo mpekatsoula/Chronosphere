@@ -256,98 +256,6 @@ void search_indicies() {
 
 }
 
-/* Find delay on Nets */
-int find_nets_delay_() {
-
-  for ( auto it = Nets.begin(); it != Nets.end(); ++it ) {
-
-    /* Find information */
-    string cellType = (it->second).fromPin.cellType;
-    string pinName = (it->second).fromPin.pinName;
-    string instance_name = (it->second).fromPin.instance_name;
-    string netName = it->second.netName;
-
-    /* If Cell type is empty, we are either connecting a primary input or a primary output with a pin */
-    if ( cellType.empty() ) {
-      double total_res = 0;
-      double total_cap = 0;
-      for ( auto j = SpefNets[netName].resistances.begin(); j != SpefNets[netName].resistances.end(); j++ ) {
-
-        /* Maybe the net is input to two or more pins. We check this here */
-        if ( j->toNodeName.n1 == netName || j->toNodeName.n1 == (it->second).toPin.instance_name ) {
-          total_cap += j->resistance;
-          /* Find next resistance */ 
-          for ( auto j2 = SpefNets[netName].capacitances.begin(); j2 != SpefNets[netName].capacitances.end(); j2++ )
-            if ( j2->nodeName.n1 == j->toNodeName.n1 && j2->nodeName.n2 == j->toNodeName.n2 ){
-              total_res += total_cap*j2->capacitance;
-              break;            
-            }
-        }
-      }
-      /* Store capacitance to Nets hash table */
-      Nets[it->first].delay = total_res;
-
-      continue;
-    }
-
-    auto tempPin = find_if( Cells[cellType].pins.begin(), Cells[cellType].pins.end(), findPinInfo( pinName ) );      
-      
-    /* Calculate nets capacitance */
-    if ( !tempPin->isInput ) {
-      if ( netName.empty() ) 
-        continue;
-
-      double total_res = 0;
-      double total_cap = 0;
-      for ( auto j = SpefNets[netName].resistances.begin(); j != SpefNets[netName].resistances.end(); j++ ) {
-
-        /* Maybe the net is input to two or more pins. We check this here */
-        if ( j->toNodeName.n1 == netName || j->toNodeName.n1 == (it->second).toPin.instance_name ) {
-          total_cap += j->resistance;
-          /* Find next resistance */ 
-          for ( auto j2 = SpefNets[netName].capacitances.begin(); j2 != SpefNets[netName].capacitances.end(); j2++ )
-            if ( j2->nodeName.n1 == j->toNodeName.n1 && j2->nodeName.n2 == j->toNodeName.n2 ){
-              total_res += total_cap*j2->capacitance;
-              break;            
-            }
-        }
-      }
-      /* Store delay to Nets hash table */
-      Nets[it->first].delay = total_res;
-    }
-    else {
-            
-      string key = instance_name + pinName;
-      for ( auto j = Pins[key].linksTo.begin(); j != Pins[key].linksTo.end(); j++ ) {
-        
-        /* Make key for Nets hash table. */
-        string nextPkey = j->instance_name + j->pinName;
-        string netkey = key + j->instance_name + j->pinName;
-
-        /* C is the sum of all the nodes linked to, to the pin we are looking at */
-        for ( auto j2 = Pins[nextPkey].linksTo.begin(); j2 != Pins[nextPkey].linksTo.end(); j2++ ) {
-
-          /* If cellType is empty, then we are looking at a net that connects an primary output */
-          if ( j2->cellType.empty() )
-            continue;
-
-          auto cellPin  = find_if( Cells[j2->cellType].pins.begin(), Cells[j2->cellType].pins.end(), findPinInfo( j2->pinName ) );             
-          Nets[netkey].delay += cellPin->capacitance;
-                
-        }
-      }
-    }   
-  }
-
-#ifdef DEBUG
-  for ( auto i = Nets.begin(); i != Nets.end(); i++ ) 
-    cout << "Net: " << i->first << " Cap: " << (i->second).delay << endl;
-#endif
-
-  return 1;
-
-}
-
 double calculate_net_delay( string netName, string instance_name ) {
 
   double total_res = 0;
@@ -395,7 +303,7 @@ double calculate_fanout( string nextPkey, string spefKey ) {
 }
 
 
-double BilinearInterpol ( double index1, double index2, string cellName, string pinName, int type ) {
+double BilinearInterpol ( double index1, double index2, LibParserLUT lut ) {
 
   double result = 0;
   int x1;
@@ -404,34 +312,6 @@ double BilinearInterpol ( double index1, double index2, string cellName, string 
   int y2;
   std::vector<double>::iterator low1;
   std::vector<double>::iterator low2;
-
-  auto tempPin = std::find_if( Cells[cellName].pins.begin(), Cells[cellName].pins.end(), findPinInfo( pinName ) );      
-  auto timingArc = std::find_if ( Cells[cellName].timingArcs.begin(), Cells[cellName].timingArcs.end(), findTimingArchPin( pinName ));
-
-  /* Types: 0 -> riseTransition *
-   *        1 -> fallTransition * 
-   *        2 -> riseDelay      *
-   *        3 -> fallDelay      */
-  LibParserLUT lut;
-  switch ( type ) {
-
-    case 0:
-      lut = timingArc->riseTransition;
-    break;
-    
-    case 1:
-      lut = timingArc->fallTransition;
-    break;
-
-    case 2:
-      lut = timingArc->riseDelay;
-    break;
-
-    case 3:
-      lut = timingArc->fallDelay;
-    break;
-
-  }
 
   /* Binary search for indices */
   low1 = std::lower_bound (lut.loadIndices.begin(), lut.loadIndices.end(), index1 );
@@ -470,12 +350,6 @@ double BilinearInterpol ( double index1, double index2, string cellName, string 
     y2 = y1;
     y1--;
   }
-
-#ifdef DEBUG
-  cout << "Type: " << type << endl;
-  cout << "Cell: " << cellName <<  " Index 1 is : " << index1 << " lower bound: [" << x1 << "," << x2 << "] --> [" << lut.loadIndices[x1] << "," << lut.loadIndices[x2] << "]" << endl;
-  cout << "Cell: " << cellName <<  " Index 2 is : " << index2 << " lower bound: [" << y1 << "," << y2 << "] --> [" << lut.transitionIndices[y1] << "," << lut.transitionIndices[y2] << "]" << endl;
-#endif
 
   if ( x1 == x2 && y1 == y2 ) {
 
@@ -577,10 +451,6 @@ int find_nets_delay() {
         // Insert pin to visited list
         Visited.insert(Visited.end(), key );
 
-        std::vector<LibParserPinInfo>::iterator tempPin  = std::find_if( Cells[i->cellType].pins.begin(), Cells[i->cellType].pins.end(),
-                                                                         findPinInfo( i->pinName ) );      
- 
-
         /* If pin is input, that means that it is connected in-cell. *
          * So we need to call interpolation/extrapolation functions, *
          * else calculate delay with wire capacitances               */
@@ -588,6 +458,7 @@ int find_nets_delay() {
 
           double fan_out;
           string nxtKey;
+          string netkey;
 
           /* For is not needed because we only have one in-cell *
            * connection but makes our life easier cause we      * 
@@ -596,17 +467,19 @@ int find_nets_delay() {
             
             /* Make key for Nets hash table. */
             nxtKey = j->instance_name + j->pinName;
-            string netkey = key + j->instance_name + j->pinName;
+            netkey = key + j->instance_name + j->pinName;
 
             fan_out = calculate_fanout( nxtKey, Pins[nxtKey].connNetName );
 
           }
-      
+          /* TODO: fix FFs*/
+          if ( nxtKey.empty() )
+              goto fuckFF;
+
           if ( Pins[key].linkedBy.empty() ) {
             printf("Error. Linked by empty!\n");
             exit(0);
           }
-
           string prevKey =  Pins[key].linkedBy[0].instance_name + Pins[key].linkedBy[0].pinName;
           string cellName = i->cellType;
 
@@ -615,18 +488,73 @@ int find_nets_delay() {
           Pins[key].tr_f_early = std::min( Pins[key].tr_f_early, Pins[prevKey].tr_f_early );
           Pins[key].tr_r_late = std::max( Pins[key].tr_r_early, Pins[prevKey].tr_r_early );
           Pins[key].tr_f_late = std::max( Pins[key].tr_f_early, Pins[prevKey].tr_f_early );
+    
+          auto timingArc = std::find_if ( Cells[cellName].timingArcs.begin(), Cells[cellName].timingArcs.end(), findTimingArchPin( i->pinName ));
+          double tr_r_LATE, tr_f_LATE;
+          double tr_r_EARLY, tr_f_EARLY;
 
-          /* Call interpolation */
-          Pins[nxtKey].tr_r_early = BilinearInterpol( 17, Pins[key].tr_r_early, cellName,  i->pinName, 0 );
-          Pins[nxtKey].tr_f_early = BilinearInterpol( fan_out, Pins[key].tr_f_early, cellName, i->pinName, 1 );
-          Pins[nxtKey].tr_r_late = BilinearInterpol( fan_out, Pins[key].tr_r_late, cellName, i->pinName, 0 );
-          Pins[nxtKey].tr_f_late = BilinearInterpol( fan_out, Pins[key].tr_f_late, cellName, i->pinName, 1 );
-/*
-          Nets[nxtKey].dr_EARLY = BilinearInterpol( fan_out, Pins[key].tr_r_early, cellName,  i->pinName, 2 );
-          Nets[nxtKey].df_EARLY = BilinearInterpol( fan_out, Pins[key].tr_f_early, cellName, i->pinName, 3 );
-          Nets[nxtKey].dr_LATE = BilinearInterpol( fan_out, Pins[key].tr_r_late, cellName, i->pinName, 2 );
-          Nets[nxtKey].df_LATE = BilinearInterpol( fan_out, Pins[key].tr_f_late, cellName, i->pinName, 3 );
-*/
+          /* Positive unate */
+          if ( timingArc->timingSense == "positive_unate" ) { 
+
+            /* Call interpolation */
+            tr_r_EARLY = BilinearInterpol( fan_out, Pins[key].tr_r_early, timingArc->riseTransition );
+            tr_f_EARLY = BilinearInterpol( fan_out, Pins[key].tr_f_early, timingArc->fallTransition );
+            tr_r_LATE = BilinearInterpol( fan_out, Pins[key].tr_r_late, timingArc->riseTransition );
+            tr_f_LATE = BilinearInterpol( fan_out, Pins[key].tr_f_late, timingArc->fallTransition );
+
+            /* Call interpolation for nets */
+            Nets[netkey].dr_EARLY = BilinearInterpol( fan_out, Pins[key].tr_r_early, timingArc->riseDelay );
+            Nets[netkey].df_EARLY = BilinearInterpol( fan_out, Pins[key].tr_f_early, timingArc->fallDelay );
+            Nets[netkey].dr_LATE = BilinearInterpol( fan_out, Pins[key].tr_r_late, timingArc->riseDelay );
+            Nets[netkey].df_LATE = BilinearInterpol( fan_out, Pins[key].tr_f_late, timingArc->fallDelay );
+
+          }
+          else if ( timingArc->timingSense == "negative_unate" ) { 
+
+            /* Call interpolation */
+            tr_r_EARLY = BilinearInterpol( fan_out, Pins[key].tr_f_early, timingArc->riseTransition );
+            tr_f_EARLY = BilinearInterpol( fan_out, Pins[key].tr_r_early, timingArc->fallTransition );
+            tr_r_LATE = BilinearInterpol( fan_out, Pins[key].tr_f_late, timingArc->riseTransition );
+            tr_f_LATE = BilinearInterpol( fan_out, Pins[key].tr_r_late, timingArc->fallTransition );
+
+            /* Call interpolation for nets */
+            Nets[netkey].dr_EARLY = BilinearInterpol( fan_out, Pins[key].tr_f_early, timingArc->riseDelay );
+            Nets[netkey].df_EARLY = BilinearInterpol( fan_out, Pins[key].tr_r_early, timingArc->fallDelay );
+            Nets[netkey].dr_LATE = BilinearInterpol( fan_out, Pins[key].tr_f_late, timingArc->riseDelay );
+            Nets[netkey].df_LATE = BilinearInterpol( fan_out, Pins[key].tr_r_late, timingArc->fallDelay );
+
+          }
+          else if ( timingArc->timingSense == "non_unate" ) {
+
+            /* Call interpolation */
+            double tr_EARLY = std::min( Pins[key].tr_f_early, Pins[key].tr_r_early );
+            double tr_LATE = std::max( Pins[key].tr_f_late, Pins[key].tr_r_late );
+
+            tr_r_EARLY = BilinearInterpol( fan_out, tr_EARLY, timingArc->riseTransition );
+            tr_f_EARLY = BilinearInterpol( fan_out, tr_EARLY, timingArc->fallTransition );
+            tr_r_LATE = BilinearInterpol( fan_out, tr_LATE, timingArc->riseTransition );
+            tr_f_LATE = BilinearInterpol( fan_out, tr_LATE, timingArc->fallTransition );
+
+            /* Call interpolation for nets */
+            Nets[netkey].dr_EARLY = BilinearInterpol( fan_out, tr_EARLY, timingArc->riseDelay );
+            Nets[netkey].df_EARLY = BilinearInterpol( fan_out, tr_EARLY, timingArc->fallDelay );
+            Nets[netkey].dr_LATE = BilinearInterpol( fan_out, tr_LATE, timingArc->riseDelay );
+            Nets[netkey].df_LATE = BilinearInterpol( fan_out, tr_LATE, timingArc->fallDelay );
+
+          }
+
+          if ( tr_f_LATE > Pins[nxtKey].tr_f_late ) 
+      			Pins[nxtKey].tr_f_late = tr_f_LATE;
+
+			    if ( tr_r_LATE > Pins[nxtKey].tr_r_late ) 
+      			Pins[nxtKey].tr_r_late = tr_r_LATE;
+
+			    if ( tr_f_EARLY < Pins[nxtKey].tr_f_early ) 
+      			Pins[nxtKey].tr_f_early =  tr_f_EARLY;
+
+			    if ( tr_r_EARLY < Pins[nxtKey].tr_r_early ) 
+      			Pins[nxtKey].tr_r_early =  tr_r_EARLY;
+
         }
         else {
 
@@ -644,7 +572,7 @@ int find_nets_delay() {
           }
 
         }
-
+fuckFF:
         nextLevel.insert( nextLevel.end(), Pins[key].linksTo.begin(), Pins[key].linksTo.end() );
       }
     }
@@ -655,10 +583,19 @@ int find_nets_delay() {
     level++;
   }
 
-  for ( auto i = Nets.begin(); i != Nets.end(); i++ ) 
-      cout << "Net: " << i->first << " delay: " << (i->second).delay << endl;
+#ifdef DEBUG
+  for ( auto i = Nets.begin(); i != Nets.end(); i++ ) {
+      cout << "Net: " << i->first << endl;
+      cout << "\t dr_EARLY: " << (i->second).dr_EARLY << endl;
+      cout << "\t dr_LATE: " << (i->second).dr_LATE << endl;
+      cout << "\t df_EARLY: " << (i->second).df_EARLY << endl;
+      cout << "\t df_LATE: " << (i->second).df_LATE << endl;
+  }
+
   for ( auto i = SpefNets.begin(); i != SpefNets.end(); i++ ) 
     cout << " sssssD: " << i->first << " delay: " << (i->second).netLumpedCap << endl;
+#endif
+
   return 1;
 
 }
